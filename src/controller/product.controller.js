@@ -413,18 +413,37 @@ Do NOT wrap the JSON in markdown code blocks, backticks, or any conversational t
     }
 
     const geminiData = await geminiRes.json();
+    console.log(`[IMEI Lookup] Full Gemini response structure:`, JSON.stringify(geminiData, null, 2));
+
     const textReply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
 
+    console.log(`[IMEI Lookup] Raw textReply: "${textReply}"`);
+
     if (!textReply) {
+      // Check if there's a prompt feedback / block reason
+      const blockReason = geminiData?.promptFeedback?.blockReason;
+      if (blockReason) {
+        console.log(`[IMEI Lookup] Blocked by Gemini: ${blockReason}`);
+        return res.status(502).json({ error: `AI request was blocked: ${blockReason}` });
+      }
       return res.status(404).json({ error: "Specs could not be identified." });
     }
 
     try {
-      const match = textReply.match(/\{[\s\S]*\}/);
-      if (!match) {
-        throw new Error("No JSON object found in AI response");
+      // Strategy 1: Direct JSON.parse (responseMimeType: "application/json" should give pure JSON)
+      let parsedSpecs;
+      try {
+        parsedSpecs = JSON.parse(textReply.trim());
+      } catch (_directErr) {
+        // Strategy 2: Extract JSON object via regex
+        const match = textReply.match(/\{[\s\S]*\}/);
+        if (!match) {
+          throw new Error("No JSON object found in AI response");
+        }
+        parsedSpecs = JSON.parse(match[0].trim());
       }
-      const parsedSpecs = JSON.parse(match[0].trim());
+
+      console.log(`[IMEI Lookup] Parsed specs:`, parsedSpecs);
       res.json(parsedSpecs);
     } catch (parseErr) {
       console.error("Failed to parse Gemini response as JSON:", textReply, parseErr);
