@@ -1,0 +1,90 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+enum Role {
+    ADMIN
+    STAFF
+}
+
+enum ProductStatus {
+    IN_STOCK
+    LOW_STOCK
+    OUT_OF_STOCK
+}
+
+model User {
+    id           Int           @id @default(autoincrement())
+    name         String
+    email        String        @unique
+    password     String
+    role         Role          @default(STAFF)
+    refreshToken String?
+    createdAt    DateTime      @default(now())
+    updatedAt    DateTime      @updatedAt
+    sales        Sale[]
+    chatMessages ChatMessage[]
+}
+
+model Supplier {
+    id            Int       @id @default(autoincrement())
+    supplierName  String    @unique
+    contactNumber String?
+    email         String?
+    address       String?
+    products      Product[]
+    createdAt     DateTime  @default(now())
+}
+
+model Product {
+    id            Int           @id @default(autoincrement())
+    brand         String
+    model         String
+    variant       String?
+    storage       String?
+    ram           String?
+    color         String?
+    imei          String?       @unique
+    supplierId    Int?
+    supplier      Supplier?     @relation(fields: [supplierId], references: [id])
+    purchasePrice Decimal       @db.Decimal(10, 2)
+    sellingPrice  Decimal       @db.Decimal(10, 2)
+    quantity      Int           @default(0)
+    imageUrl      String?
+    status        ProductStatus @default(IN_STOCK)
+    createdAt     DateTime      @default(now())
+    updatedAt     DateTime      @updatedAt
+    sales         Sale[]
+
+    @@index([brand], name: "idx_products_brand")
+    @@index([status], name: "idx_products_status")
+}
+
+model Sale {
+    id           Int      @id @default(autoincrement())
+    productId    Int
+    product      Product  @relation(fields: [productId], references: [id])
+    soldById     Int
+    soldBy       User     @relation(fields: [soldById], references: [id])
+    soldPrice    Decimal  @db.Decimal(10, 2)
+    customerName String?
+    soldDate     DateTime @default(now())
+}
+
+model ChatMessage {
+    id        Int      @id @default(autoincrement())
+    userId    Int
+    user      User     @relation(fields: [userId], references: [id])
+    text      String
+    isUser    Boolean
+    isAlert   Boolean  @default(false)
+    isHappy   Boolean  @default(false)
+    createdAt DateTime @default(now())
+
+    @@index([userId], name: "idx_chat_user")
+}
