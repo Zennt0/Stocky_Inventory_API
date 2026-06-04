@@ -393,8 +393,11 @@ Do NOT wrap the JSON in markdown code blocks, backticks, or any conversational t
       ],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 200,
+        maxOutputTokens: 1024,
         responseMimeType: "application/json",
+        thinkingConfig: {
+          thinkingBudget: 128,
+        },
       },
     };
 
