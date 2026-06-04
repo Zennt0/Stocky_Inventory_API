@@ -341,3 +341,90 @@ export async function deleteProduct(req, res, next) {
     next(err);
   }
 }
+
+// ──────────────────────────────────────────
+// GET /api/products/lookup-specs/:imei — AI Specs Lookup
+// ──────────────────────────────────────────
+export async function lookupSpecs(req, res, next) {
+  try {
+    const { imei } = req.params;
+
+    if (!imei || imei.length !== 15) {
+      return res.status(400).json({ error: "A valid 15-digit IMEI is required." });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === "SAMPLE") {
+      return res.status(500).json({
+        error: "Gemini API key is not configured. Please set GEMINI_API_KEY in your .env file.",
+      });
+    }
+
+    const systemPrompt = `You are an expert mobile device database. Given the following 15-digit IMEI, identify the brand, model, and standard storage/RAM specs.
+Use Google Search to find the specific device that maps to this IMEI or its 8-digit TAC (Type Allocation Code, which are the first 8 digits of the IMEI).
+
+You MUST respond ONLY with a valid JSON object matching this structure:
+{
+  "brand": "Manufacturer Name (e.g. Apple, Samsung, Oppo, Xiaomi)",
+  "model": "Device Model (e.g. iPhone 15 Pro, Galaxy S24)",
+  "variant": "e.g. Pro Max, Plus, 5G, LTE (or null if none)",
+  "storage": "Typical storage (e.g. 128GB, 256GB, or null if uncertain)",
+  "ram": "Typical RAM capacity in GB without suffix, just the number (e.g. 6, 8, 12, or null if uncertain)",
+  "color": "Typical color variant if possible (or null if uncertain)"
+}
+
+Do NOT wrap the JSON in markdown code blocks, backticks, or any conversational text. Return ONLY the raw JSON string.`;
+
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+    const geminiBody = {
+      systemInstruction: {
+        parts: [{ text: systemPrompt }],
+      },
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `IMEI to lookup: ${imei}` }],
+        },
+      ],
+      tools: [
+        {
+          google_search: {},
+        },
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 200,
+        responseMimeType: "application/json",
+      },
+    };
+
+    const geminiRes = await fetch(geminiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(geminiBody),
+    });
+
+    if (!geminiRes.ok) {
+      console.error("Gemini API error in lookup:", geminiRes.status);
+      return res.status(502).json({ error: "Failed to query AI for specifications." });
+    }
+
+    const geminiData = await geminiRes.json();
+    const textReply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!textReply) {
+      return res.status(404).json({ error: "Specs could not be identified." });
+    }
+
+    try {
+      const parsedSpecs = JSON.parse(textReply.trim());
+      res.json(parsedSpecs);
+    } catch (parseErr) {
+      console.error("Failed to parse Gemini response as JSON:", textReply);
+      res.status(502).json({ error: "Invalid specifications format returned by AI." });
+    }
+  } catch (err) {
+    next(err);
+  }
+}
