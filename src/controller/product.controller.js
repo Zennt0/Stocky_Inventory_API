@@ -387,11 +387,6 @@ Do NOT wrap the JSON in markdown code blocks, backticks, or any conversational t
           parts: [{ text: `IMEI to lookup: ${imei}` }],
         },
       ],
-      tools: [
-        {
-          google_search: {},
-        },
-      ],
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 200,
@@ -406,8 +401,9 @@ Do NOT wrap the JSON in markdown code blocks, backticks, or any conversational t
     });
 
     if (!geminiRes.ok) {
-      console.error("Gemini API error in lookup:", geminiRes.status);
-      return res.status(502).json({ error: "Failed to query AI for specifications." });
+      const errText = await geminiRes.text().catch(() => "");
+      console.error("Gemini API error in lookup:", geminiRes.status, errText);
+      return res.status(502).json({ error: `Failed to query AI for specifications: ${geminiRes.status}` });
     }
 
     const geminiData = await geminiRes.json();
@@ -418,10 +414,16 @@ Do NOT wrap the JSON in markdown code blocks, backticks, or any conversational t
     }
 
     try {
-      const parsedSpecs = JSON.parse(textReply.trim());
+      let cleanedText = textReply.trim();
+      if (cleanedText.startsWith("```")) {
+        cleanedText = cleanedText
+          .replace(/^```[a-zA-Z]*\n/, "")
+          .replace(/\n```$/, "");
+      }
+      const parsedSpecs = JSON.parse(cleanedText.trim());
       res.json(parsedSpecs);
     } catch (parseErr) {
-      console.error("Failed to parse Gemini response as JSON:", textReply);
+      console.error("Failed to parse Gemini response as JSON:", textReply, parseErr);
       res.status(502).json({ error: "Invalid specifications format returned by AI." });
     }
   } catch (err) {
