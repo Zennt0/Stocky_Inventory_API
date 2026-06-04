@@ -414,13 +414,11 @@ Do NOT wrap the JSON in markdown code blocks, backticks, or any conversational t
     }
 
     try {
-      let cleanedText = textReply.trim();
-      if (cleanedText.startsWith("```")) {
-        cleanedText = cleanedText
-          .replace(/^```[a-zA-Z]*\n/, "")
-          .replace(/\n```$/, "");
+      const match = textReply.match(/\{[\s\S]*\}/);
+      if (!match) {
+        throw new Error("No JSON object found in AI response");
       }
-      const parsedSpecs = JSON.parse(cleanedText.trim());
+      const parsedSpecs = JSON.parse(match[0].trim());
       res.json(parsedSpecs);
     } catch (parseErr) {
       console.error("Failed to parse Gemini response as JSON:", textReply, parseErr);
