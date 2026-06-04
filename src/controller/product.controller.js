@@ -349,12 +349,16 @@ export async function lookupSpecs(req, res, next) {
   try {
     const { imei } = req.params;
 
+    console.log(`[IMEI Lookup] Received IMEI: "${imei}" (length: ${imei?.length})`);
+
     if (!imei || imei.length !== 15) {
+      console.log(`[IMEI Lookup] REJECTED: Invalid IMEI length. Expected 15, got ${imei?.length}`);
       return res.status(400).json({ error: "A valid 15-digit IMEI is required." });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey === "SAMPLE") {
+      console.log(`[IMEI Lookup] REJECTED: GEMINI_API_KEY not configured (value: "${apiKey}")`);
       return res.status(500).json({
         error: "Gemini API key is not configured. Please set GEMINI_API_KEY in your .env file.",
       });
@@ -375,7 +379,7 @@ You MUST respond ONLY with a valid JSON object matching this structure:
 
 Do NOT wrap the JSON in markdown code blocks, backticks, or any conversational text. Return ONLY the raw JSON string.`;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
 
     const geminiBody = {
       systemInstruction: {
@@ -399,6 +403,8 @@ Do NOT wrap the JSON in markdown code blocks, backticks, or any conversational t
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(geminiBody),
     });
+
+    console.log(`[IMEI Lookup] Gemini API status: ${geminiRes.status}`);
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text().catch(() => "");
