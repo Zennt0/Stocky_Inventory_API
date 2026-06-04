@@ -364,20 +364,21 @@ export async function lookupSpecs(req, res, next) {
       });
     }
 
-    const systemPrompt = `You are an expert mobile device database. Given the following 15-digit IMEI, identify the brand, model, and standard storage/RAM specs.
-Use Google Search to find the specific device that maps to this IMEI or its 8-digit TAC (Type Allocation Code, which are the first 8 digits of the IMEI).
+    const tac = imei.substring(0, 8);
 
-You MUST respond ONLY with a valid JSON object matching this structure:
+    const systemPrompt = `You are an expert mobile device identification system. You MUST use Google Search to look up the TAC (Type Allocation Code) to identify the exact device.
+
+Search for: "TAC ${tac}" or "IMEI ${tac} device" to find the brand and model.
+
+You MUST respond ONLY with a valid JSON object (no markdown, no backticks, no explanation):
 {
-  "brand": "Manufacturer Name (e.g. Apple, Samsung, Oppo, Xiaomi)",
-  "model": "Device Model (e.g. iPhone 15 Pro, Galaxy S24)",
-  "variant": "e.g. Pro Max, Plus, 5G, LTE (or null if none)",
-  "storage": "Typical storage (e.g. 128GB, 256GB, or null if uncertain)",
-  "ram": "Typical RAM capacity in GB without suffix, just the number (e.g. 6, 8, 12, or null if uncertain)",
-  "color": "Typical color variant if possible (or null if uncertain)"
-}
-
-Do NOT wrap the JSON in markdown code blocks, backticks, or any conversational text. Return ONLY the raw JSON string.`;
+  "brand": "Manufacturer (e.g. Samsung, Apple, Oppo, Xiaomi)",
+  "model": "Model name (e.g. Galaxy A25, iPhone 15 Pro)",
+  "variant": "variant if known (e.g. 5G, LTE) or null",
+  "storage": "storage if known (e.g. 128GB) or null",
+  "ram": "RAM in GB number only (e.g. 8) or null",
+  "color": "color if known or null"
+}`;
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
 
@@ -388,15 +389,17 @@ Do NOT wrap the JSON in markdown code blocks, backticks, or any conversational t
       contents: [
         {
           role: "user",
-          parts: [{ text: `IMEI to lookup: ${imei}` }],
+          parts: [{ text: `Look up TAC: ${tac} (full IMEI: ${imei}). Search online and return the device brand and model as JSON.` }],
         },
+      ],
+      tools: [
+        { google_search: {} },
       ],
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 1024,
-        responseMimeType: "application/json",
         thinkingConfig: {
-          thinkingBudget: 128,
+          thinkingLevel: "MINIMAL",
         },
       },
     };
