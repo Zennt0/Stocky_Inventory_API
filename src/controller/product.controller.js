@@ -404,13 +404,33 @@ You MUST respond ONLY with a valid JSON object (no markdown, no backticks, no ex
       },
     };
 
-    const geminiRes = await fetch(geminiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(geminiBody),
-    });
+    // Fetch with retry for rate limiting (429)
+    const MAX_RETRIES = 2;
+    let geminiRes;
 
-    console.log(`[IMEI Lookup] Gemini API status: ${geminiRes.status}`);
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      geminiRes = await fetch(geminiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geminiBody),
+      });
+
+      console.log(`[IMEI Lookup] Gemini API status: ${geminiRes.status} (attempt ${attempt + 1})`);
+
+      if (geminiRes.status === 429 && attempt < MAX_RETRIES) {
+        const waitMs = (attempt + 1) * 3000; // 3s, 6s
+        console.log(`[IMEI Lookup] Rate limited. Retrying in ${waitMs / 1000}s...`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      break;
+    }
+
+    if (geminiRes.status === 429) {
+      return res.status(429).json({
+        error: "AI lookup is temporarily unavailable due to limits. Please try again in a minute.",
+      });
+    }
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text().catch(() => "");
