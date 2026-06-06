@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticate, authorize } from "../middleware/auth.js";
+import { aiLookupLimiter } from "../middleware/rateLimit.js";
 import {
   getProducts,
   getLowStock,
@@ -22,7 +23,7 @@ router.get("/", getProducts);
 router.get("/low-stock", getLowStock);
 router.get("/stats", getStats);
 router.get("/imei/:imei", getByImei);
-router.get("/lookup-specs/:imei", lookupSpecs);
+router.get("/lookup-specs/:imei", aiLookupLimiter, lookupSpecs);
 router.get("/:id", getProduct);
 
 // Write routes (Admin & Staff only)

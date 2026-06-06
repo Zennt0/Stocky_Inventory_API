@@ -74,6 +74,9 @@ model Sale {
     soldPrice    Decimal  @db.Decimal(10, 2)
     customerName String?
     soldDate     DateTime @default(now())
+
+    @@index([soldDate], name: "idx_sales_date")
+    @@index([productId], name: "idx_sales_product")
 }
 
 model ChatMessage {

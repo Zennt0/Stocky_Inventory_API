@@ -1,5 +1,11 @@
 import prisma from "../config/prisma.js";
 
+/** Safely parse an ID param — returns null if not a valid integer */
+function parseId(val) {
+  const n = parseInt(val, 10);
+  return Number.isNaN(n) || n <= 0 ? null : n;
+}
+
 // ──────────────────────────────────────────
 // GET /api/products — List all products
 // ──────────────────────────────────────────
@@ -166,8 +172,11 @@ export async function getByImei(req, res, next) {
 // ──────────────────────────────────────────
 export async function getProduct(req, res, next) {
   try {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: "Invalid product ID." });
+
     const product = await prisma.product.findUnique({
-      where: { id: parseInt(req.params.id) },
+      where: { id },
       include: {
         supplier: {
           select: { id: true, supplierName: true },
@@ -301,8 +310,11 @@ export async function updateProduct(req, res, next) {
       else data.status = "IN_STOCK";
     }
 
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: "Invalid product ID." });
+
     const product = await prisma.product.update({
-      where: { id: parseInt(req.params.id) },
+      where: { id },
       data,
       include: {
         supplier: {
@@ -322,8 +334,11 @@ export async function updateProduct(req, res, next) {
 // ──────────────────────────────────────────
 export async function deleteProduct(req, res, next) {
   try {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: "Invalid product ID." });
+
     const salesCount = await prisma.sale.count({
-      where: { productId: parseInt(req.params.id) },
+      where: { productId: id },
     });
 
     if (salesCount > 0) {
@@ -333,7 +348,7 @@ export async function deleteProduct(req, res, next) {
     }
 
     await prisma.product.delete({
-      where: { id: parseInt(req.params.id) },
+      where: { id },
     });
 
     res.json({ message: "Product deleted successfully." });
@@ -404,31 +419,37 @@ You MUST respond ONLY with a valid JSON object (no markdown, no backticks, no ex
       },
     };
 
-    // Fetch with retry for rate limiting (429)
-    const MAX_RETRIES = 2;
-    let geminiRes;
+    // Fetch with single retry for transient rate limiting (429)
+    let geminiRes = await fetch(geminiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(geminiBody),
+    });
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      geminiRes = await fetch(geminiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geminiBody),
-      });
+    console.log(`[IMEI Lookup] Gemini API status: ${geminiRes.status}`);
 
-      console.log(`[IMEI Lookup] Gemini API status: ${geminiRes.status} (attempt ${attempt + 1})`);
+    // Single retry after 2s if rate limited (burst limit, not daily quota)
+    if (geminiRes.status === 429) {
+      const errBody = await geminiRes.text().catch(() => "");
+      const isDailyQuota = errBody.includes("RATE_LIMIT_EXCEEDED") || errBody.includes("quota");
 
-      if (geminiRes.status === 429 && attempt < MAX_RETRIES) {
-        const waitMs = (attempt + 1) * 3000; // 3s, 6s
-        console.log(`[IMEI Lookup] Rate limited. Retrying in ${waitMs / 1000}s...`);
-        await new Promise((r) => setTimeout(r, waitMs));
-        continue;
+      if (!isDailyQuota) {
+        console.log(`[IMEI Lookup] Burst rate limited. Retrying in 2s...`);
+        await new Promise((r) => setTimeout(r, 2000));
+        geminiRes = await fetch(geminiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(geminiBody),
+        });
+        console.log(`[IMEI Lookup] Gemini API status: ${geminiRes.status} (retry)`);
+      } else {
+        console.log(`[IMEI Lookup] Daily quota exhausted. Skipping retries.`);
       }
-      break;
     }
 
     if (geminiRes.status === 429) {
       return res.status(429).json({
-        error: "AI lookup is temporarily unavailable due to limits. Please try again in a minute.",
+        error: "AI lookup limit reached for today. Please try again tomorrow.",
       });
     }
 

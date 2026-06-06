@@ -1,5 +1,11 @@
 import prisma from "../config/prisma.js";
 
+/** Safely parse an ID param — returns null if not a valid integer */
+function parseId(val) {
+  const n = parseInt(val, 10);
+  return Number.isNaN(n) || n <= 0 ? null : n;
+}
+
 // ──────────────────────────────────────────
 // POST /api/sales — Record a sale
 // ──────────────────────────────────────────
@@ -13,27 +19,28 @@ export async function createSale(req, res, next) {
         .json({ error: "productId and soldPrice are required." });
     }
 
-    // Check product exists and has stock
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(productId) },
-    });
+    const pid = parseId(productId);
+    if (!pid) return res.status(400).json({ error: "Invalid product ID." });
 
-    if (!product) {
-      return res.status(404).json({ error: "Product not found." });
-    }
-
-    if (product.quantity <= 0) {
-      return res
-        .status(400)
-        .json({ error: "Product is out of stock. Cannot sell." });
-    }
-
-    // Use a transaction: create sale + decrease stock
+    // Atomic transaction: check stock + create sale + decrement in one go
     const result = await prisma.$transaction(async (tx) => {
+      // Re-read product inside the transaction to prevent race conditions
+      const product = await tx.product.findUnique({
+        where: { id: pid },
+      });
+
+      if (!product) {
+        throw Object.assign(new Error("Product not found."), { status: 404 });
+      }
+
+      if (product.quantity <= 0) {
+        throw Object.assign(new Error("Product is out of stock. Cannot sell."), { status: 400 });
+      }
+
       // Create sale record
       const sale = await tx.sale.create({
         data: {
-          productId: parseInt(productId),
+          productId: pid,
           soldById: req.user.id,
           soldPrice: parseFloat(soldPrice),
           customerName: customerName || null,
@@ -62,7 +69,7 @@ export async function createSale(req, res, next) {
       else if (newQuantity <= 3) newStatus = "LOW_STOCK";
 
       await tx.product.update({
-        where: { id: parseInt(productId) },
+        where: { id: pid },
         data: {
           quantity: newQuantity,
           status: newStatus,
@@ -247,8 +254,11 @@ export async function getSalesStats(req, res, next) {
 // ──────────────────────────────────────────
 export async function getSale(req, res, next) {
   try {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: "Invalid sale ID." });
+
     const sale = await prisma.sale.findUnique({
-      where: { id: parseInt(req.params.id) },
+      where: { id },
       include: {
         product: {
           select: {
