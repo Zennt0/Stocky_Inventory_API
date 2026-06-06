@@ -462,8 +462,15 @@ You MUST respond ONLY with a valid JSON object (no markdown, no backticks, no ex
     const geminiData = await geminiRes.json();
     console.log(`[IMEI Lookup] Full Gemini response structure:`, JSON.stringify(geminiData, null, 2));
 
-    const textReply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+    // When google_search tool is used, the response has multiple parts.
+    // The actual text reply is usually in the LAST part that has a "text" field.
+    const parts = geminiData?.candidates?.[0]?.content?.parts || [];
+    const textReply = parts
+      .filter((p) => typeof p.text === "string")
+      .map((p) => p.text)
+      .pop(); // Get the last text part (the AI's final answer)
 
+    console.log(`[IMEI Lookup] Response parts count: ${parts.length}`);
     console.log(`[IMEI Lookup] Raw textReply: "${textReply}"`);
 
     if (!textReply) {
