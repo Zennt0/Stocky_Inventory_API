@@ -21,6 +21,7 @@ import "./src/config/env.js";
 await connect();
 
 const app = express();
+app.set("trust proxy", 1); // Trust first proxy (needed for Render hosting)
 const PORT = process.env.PORT || 3000;
 
 // ── Security Middleware ──
