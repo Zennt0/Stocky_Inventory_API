@@ -19,16 +19,25 @@ enum ProductStatus {
 }
 
 model User {
-    id           Int           @id @default(autoincrement())
-    name         String
-    email        String        @unique
-    password     String
-    role         Role          @default(STAFF)
-    refreshToken String?
-    createdAt    DateTime      @default(now())
-    updatedAt    DateTime      @updatedAt
-    sales        Sale[]
-    chatMessages ChatMessage[]
+    id                       Int           @id @default(autoincrement())
+    firstName                String
+    lastName                 String
+    email                    String        @unique
+    password                 String
+    role                     Role          @default(STAFF)
+    refreshToken             String?
+    emailVerified            Boolean       @default(false)
+    verificationToken        String?
+    verificationTokenExpires DateTime?
+    resetPasswordToken       String?
+    resetPasswordExpires     DateTime?
+    failedLoginAttempts      Int           @default(0)
+    lockoutUntil             DateTime?
+    createdAt                DateTime      @default(now())
+    updatedAt                DateTime      @updatedAt
+    sales                    Sale[]
+    chatMessages             ChatMessage[]
+    products                 Product[]
 }
 
 model Supplier {
@@ -52,6 +61,8 @@ model Product {
     imei          String?       @unique
     supplierId    Int?
     supplier      Supplier?     @relation(fields: [supplierId], references: [id])
+    userId        Int
+    user          User          @relation(fields: [userId], references: [id])
     purchasePrice Decimal       @db.Decimal(10, 2)
     sellingPrice  Decimal       @db.Decimal(10, 2)
     quantity      Int           @default(0)

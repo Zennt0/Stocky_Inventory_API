@@ -1,4 +1,5 @@
-import prisma from "../config/prisma.js";
+import * as productService from "../services/product.service.js";
+import logger from "../config/logger.js";
 
 /** Safely parse an ID param — returns null if not a valid integer */
 function parseId(val) {
@@ -56,21 +57,12 @@ export async function getProducts(req, res, next) {
     const sortField = validSortFields.includes(sort) ? sort : "createdAt";
     orderBy[sortField] = order === "asc" ? "asc" : "desc";
 
-    // Execute query with count
-    const [products, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        orderBy,
-        skip,
-        take,
-        include: {
-          supplier: {
-            select: { id: true, supplierName: true },
-          },
-        },
-      }),
-      prisma.product.count({ where }),
-    ]);
+    const { products, total } = await productService.listProducts(req.user.id, {
+      where,
+      orderBy,
+      skip,
+      take,
+    });
 
     res.json({
       products,
@@ -91,18 +83,7 @@ export async function getProducts(req, res, next) {
 // ──────────────────────────────────────────
 export async function getLowStock(req, res, next) {
   try {
-    const products = await prisma.product.findMany({
-      where: {
-        status: { in: ["LOW_STOCK", "OUT_OF_STOCK"] },
-      },
-      orderBy: { quantity: "asc" },
-      include: {
-        supplier: {
-          select: { id: true, supplierName: true },
-        },
-      },
-    });
-
+    const products = await productService.getLowStockProducts(req.user.id);
     res.json({ products, count: products.length });
   } catch (err) {
     next(err);
@@ -114,28 +95,8 @@ export async function getLowStock(req, res, next) {
 // ──────────────────────────────────────────
 export async function getStats(req, res, next) {
   try {
-    const [totalProducts, totalUnits, lowStockCount, inventoryValue] =
-      await Promise.all([
-        prisma.product.count(),
-        prisma.product.aggregate({ _sum: { quantity: true } }),
-        prisma.product.count({
-          where: { status: { in: ["LOW_STOCK", "OUT_OF_STOCK"] } },
-        }),
-        prisma.product.findMany({
-          select: { sellingPrice: true, quantity: true },
-        }),
-      ]);
-
-    const totalValue = inventoryValue.reduce((sum, p) => {
-      return sum + Number(p.sellingPrice) * p.quantity;
-    }, 0);
-
-    res.json({
-      totalProducts,
-      totalUnits: totalUnits._sum.quantity || 0,
-      lowStockCount,
-      totalValue,
-    });
+    const stats = await productService.getInventoryStats(req.user.id);
+    res.json(stats);
   } catch (err) {
     next(err);
   }
@@ -146,16 +107,9 @@ export async function getStats(req, res, next) {
 // ──────────────────────────────────────────
 export async function getByImei(req, res, next) {
   try {
-    const product = await prisma.product.findUnique({
-      where: { imei: req.params.imei },
-      include: {
-        supplier: {
-          select: { id: true, supplierName: true },
-        },
-      },
-    });
+    const product = await productService.findByImei(req.params.imei);
 
-    if (!product) {
+    if (!product || product.userId !== req.user.id) {
       return res
         .status(404)
         .json({ error: "No product found with this IMEI." });
@@ -175,27 +129,9 @@ export async function getProduct(req, res, next) {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid product ID." });
 
-    const product = await prisma.product.findUnique({
-      where: { id },
-      include: {
-        supplier: {
-          select: { id: true, supplierName: true },
-        },
-        sales: {
-          orderBy: { soldDate: "desc" },
-          take: 5,
-          select: {
-            id: true,
-            soldPrice: true,
-            customerName: true,
-            soldDate: true,
-            soldBy: { select: { name: true } },
-          },
-        },
-      },
-    });
+    const product = await productService.findById(id);
 
-    if (!product) {
+    if (!product || product.userId !== req.user.id) {
       return res.status(404).json({ error: "Product not found." });
     }
 
@@ -231,33 +167,24 @@ export async function createProduct(req, res, next) {
       });
     }
 
-    // Auto stock status
     const qty = quantity || 0;
-    let status = "IN_STOCK";
-    if (qty === 0) status = "OUT_OF_STOCK";
-    else if (qty <= 3) status = "LOW_STOCK";
+    const status = productService.computeStatus(qty);
 
-    const product = await prisma.product.create({
-      data: {
-        brand,
-        model,
-        variant,
-        storage,
-        ram,
-        color,
-        imei,
-        supplierId: supplierId ? parseInt(supplierId) : null,
-        purchasePrice: parseFloat(purchasePrice),
-        sellingPrice: parseFloat(sellingPrice),
-        quantity: qty,
-        imageUrl,
-        status,
-      },
-      include: {
-        supplier: {
-          select: { id: true, supplierName: true },
-        },
-      },
+    const product = await productService.createProduct({
+      brand,
+      model,
+      variant,
+      storage,
+      ram,
+      color,
+      imei,
+      supplierId: supplierId ? parseInt(supplierId) : null,
+      userId: req.user.id,
+      purchasePrice: parseFloat(purchasePrice),
+      sellingPrice: parseFloat(sellingPrice),
+      quantity: qty,
+      imageUrl,
+      status,
     });
 
     res.status(201).json({ product });
@@ -305,23 +232,18 @@ export async function updateProduct(req, res, next) {
 
     if (quantity !== undefined) {
       data.quantity = parseInt(quantity);
-      if (data.quantity === 0) data.status = "OUT_OF_STOCK";
-      else if (data.quantity <= 3) data.status = "LOW_STOCK";
-      else data.status = "IN_STOCK";
+      data.status = productService.computeStatus(data.quantity);
     }
 
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid product ID." });
 
-    const product = await prisma.product.update({
-      where: { id },
-      data,
-      include: {
-        supplier: {
-          select: { id: true, supplierName: true },
-        },
-      },
-    });
+    const existing = await productService.findByIdLean(id);
+    if (!existing || existing.userId !== req.user.id) {
+      return res.status(404).json({ error: "Product not found." });
+    }
+
+    const product = await productService.updateProduct(id, data);
 
     res.json({ product });
   } catch (err) {
@@ -337,9 +259,12 @@ export async function deleteProduct(req, res, next) {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid product ID." });
 
-    const salesCount = await prisma.sale.count({
-      where: { productId: id },
-    });
+    const existing = await productService.findByIdLean(id);
+    if (!existing || existing.userId !== req.user.id) {
+      return res.status(404).json({ error: "Product not found." });
+    }
+
+    const salesCount = await productService.countSalesForProduct(id);
 
     if (salesCount > 0) {
       return res.status(400).json({
@@ -347,9 +272,7 @@ export async function deleteProduct(req, res, next) {
       });
     }
 
-    await prisma.product.delete({
-      where: { id },
-    });
+    await productService.deleteProduct(id);
 
     res.json({ message: "Product deleted successfully." });
   } catch (err) {
@@ -364,16 +287,16 @@ export async function lookupSpecs(req, res, next) {
   try {
     const { imei } = req.params;
 
-    console.log(`[IMEI Lookup] Received IMEI: "${imei}" (length: ${imei?.length})`);
+    logger.info({ imei }, "IMEI Lookup request received");
 
     if (!imei || imei.length !== 15) {
-      console.log(`[IMEI Lookup] REJECTED: Invalid IMEI length. Expected 15, got ${imei?.length}`);
+      logger.warn({ imeiLength: imei?.length }, "IMEI Lookup rejected: invalid length");
       return res.status(400).json({ error: "A valid 15-digit IMEI is required." });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey === "SAMPLE") {
-      console.log(`[IMEI Lookup] REJECTED: GEMINI_API_KEY not configured (value: "${apiKey}")`);
+      logger.error("IMEI Lookup rejected: GEMINI_API_KEY not configured");
       return res.status(500).json({
         error: "Gemini API key is not configured. Please set GEMINI_API_KEY in your .env file.",
       });
@@ -381,12 +304,7 @@ export async function lookupSpecs(req, res, next) {
 
     const tac = imei.substring(0, 8);
 
-    const systemPrompt = `You are an expert mobile device identification system. You MUST use Google Search to look up the TAC (Type Allocation Code) to identify the exact device.
-
-Search for: "TAC ${tac}" or "IMEI ${tac} device" to find the brand and model.
-
-You MUST respond ONLY with a valid JSON object (no markdown, no backticks, no explanation):
-{
+    const jsonFormat = `{
   "brand": "Manufacturer (e.g. Samsung, Apple, Oppo, Xiaomi)",
   "model": "Model name (e.g. Galaxy A25, iPhone 15 Pro)",
   "variant": "variant if known (e.g. 5G, LTE) or null",
@@ -395,115 +313,173 @@ You MUST respond ONLY with a valid JSON object (no markdown, no backticks, no ex
   "color": "color if known or null"
 }`;
 
+    // ── Strategy 1: generateContent WITH google_search (best accuracy) ──
+    logger.info("IMEI Lookup Strategy 1: generateContent with google_search");
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
 
-    const geminiBody = {
+    const searchBody = {
       systemInstruction: {
-        parts: [{ text: systemPrompt }],
+        parts: [{
+          text: `You are a device identification system. You MUST search the internet for TAC/IMEI device information. NEVER guess or use memory alone. Always verify through search results.
+
+Respond ONLY with a valid JSON object (no markdown, no backticks):
+${jsonFormat}`,
+        }],
       },
       contents: [
         {
           role: "user",
-          parts: [{ text: `Look up TAC: ${tac} (full IMEI: ${imei}). Search online and return the device brand and model as JSON.` }],
+          parts: [{
+            text: `Search the web for: "TAC ${tac}" and "IMEI TAC ${tac} phone model"
+
+This is the first 8 digits (TAC) of IMEI: ${imei}
+Find what phone device this TAC belongs to and return the result as JSON.`,
+          }],
         },
       ],
-      tools: [
-        { google_search: {} },
-      ],
+      tools: [{ google_search: {} }],
       generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 1024,
-        thinkingConfig: {
-          thinkingLevel: "MINIMAL",
-        },
+        temperature: 0.0,
+        maxOutputTokens: 512,
       },
     };
 
-    // Fetch with single retry for transient rate limiting (429)
     let geminiRes = await fetch(geminiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(geminiBody),
+      body: JSON.stringify(searchBody),
     });
 
-    console.log(`[IMEI Lookup] Gemini API status: ${geminiRes.status}`);
+    logger.info({ status: geminiRes.status }, "IMEI Lookup Strategy 1 response status");
 
-    // Single retry after 2s if rate limited (burst limit, not daily quota)
+    // ── Strategy 2: If google_search is rate-limited, try WITHOUT it ──
+    let searchUsed = false;
     if (geminiRes.status === 429) {
       const errBody = await geminiRes.text().catch(() => "");
-      const isDailyQuota = errBody.includes("RATE_LIMIT_EXCEEDED") || errBody.includes("quota");
+      logger.warn({ error: errBody.substring(0, 200) }, "IMEI Lookup google_search rate limited (429)");
+      logger.info("IMEI Lookup Strategy 2: Falling back to generateContent WITHOUT google_search");
 
-      if (!isDailyQuota) {
-        console.log(`[IMEI Lookup] Burst rate limited. Retrying in 2s...`);
-        await new Promise((r) => setTimeout(r, 2000));
-        geminiRes = await fetch(geminiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(geminiBody),
-        });
-        console.log(`[IMEI Lookup] Gemini API status: ${geminiRes.status} (retry)`);
-      } else {
-        console.log(`[IMEI Lookup] Daily quota exhausted. Skipping retries.`);
-      }
+      const fallbackBody = {
+        systemInstruction: {
+          parts: [{
+            text: `You are an expert mobile device identification system with extensive knowledge of IMEI TAC (Type Allocation Code) databases.
+
+The TAC (Type Allocation Code) is the first 8 digits of an IMEI number. Each TAC uniquely maps to a specific device manufacturer and model. This is an industry standard maintained by GSMA.
+
+Common TAC prefixes and their manufacturers:
+- 35 = Often Samsung, Nokia, or other manufacturers
+- 86 = Often Huawei
+- 01 = Often Samsung or Apple
+
+You must identify the EXACT device model from the TAC. Be as specific as possible.
+
+Respond ONLY with a valid JSON object (no markdown, no backticks):
+${jsonFormat}`,
+          }],
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [{
+              text: `What device has TAC: ${tac}? (Full IMEI: ${imei})
+
+Identify the exact brand and model for this TAC code. Return as JSON.`,
+            }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.0,
+          maxOutputTokens: 512,
+        },
+      };
+
+      geminiRes = await fetch(geminiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fallbackBody),
+      });
+
+      logger.info({ status: geminiRes.status }, "IMEI Lookup Strategy 2 response status");
+    } else {
+      searchUsed = true;
     }
 
+    // ── If STILL 429 even without google_search, give up ──
     if (geminiRes.status === 429) {
+      const errBody = await geminiRes.text().catch(() => "");
+      logger.error({ error: errBody.substring(0, 200) }, "IMEI Lookup base model also rate limited");
       return res.status(429).json({
-        error: "AI lookup limit reached for today. Please try again tomorrow.",
+        error: "AI lookup limit reached. Please try again in a few minutes.",
       });
     }
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text().catch(() => "");
-      console.error("Gemini API error in lookup:", geminiRes.status, errText);
-      return res.status(502).json({ error: `Failed to query AI for specifications: ${geminiRes.status}` });
+      logger.error({ status: geminiRes.status, responseText: errText }, "IMEI Lookup Gemini API error");
+      return res.status(502).json({ error: `Failed to query AI: ${geminiRes.status}` });
     }
 
     const geminiData = await geminiRes.json();
-    console.log(`[IMEI Lookup] Full Gemini response structure:`, JSON.stringify(geminiData, null, 2));
 
-    // When google_search tool is used, the response has multiple parts.
-    // The actual text reply is usually in the LAST part that has a "text" field.
+    // Check if google_search was actually used by looking for groundingMetadata
+    if (searchUsed) {
+      const groundingMeta = geminiData?.candidates?.[0]?.groundingMetadata;
+      searchUsed = !!(groundingMeta?.searchEntryPoint || groundingMeta?.groundingChunks?.length);
+    }
+    logger.info({ searchUsed }, "IMEI Lookup search usage check");
+
+    // Extract the text reply (last text part)
     const parts = geminiData?.candidates?.[0]?.content?.parts || [];
     const textReply = parts
       .filter((p) => typeof p.text === "string")
       .map((p) => p.text)
-      .pop(); // Get the last text part (the AI's final answer)
+      .pop();
 
-    console.log(`[IMEI Lookup] Response parts count: ${parts.length}`);
-    console.log(`[IMEI Lookup] Raw textReply: "${textReply}"`);
+    logger.debug({ partsCount: parts.length, textReply }, "IMEI Lookup Gemini response details");
 
     if (!textReply) {
-      // Check if there's a prompt feedback / block reason
       const blockReason = geminiData?.promptFeedback?.blockReason;
       if (blockReason) {
-        console.log(`[IMEI Lookup] Blocked by Gemini: ${blockReason}`);
+        logger.warn({ blockReason }, "IMEI Lookup request blocked by safety filter");
         return res.status(502).json({ error: `AI request was blocked: ${blockReason}` });
       }
       return res.status(404).json({ error: "Specs could not be identified." });
     }
 
-    try {
-      // Strategy 1: Direct JSON.parse (responseMimeType: "application/json" should give pure JSON)
-      let parsedSpecs;
-      try {
-        parsedSpecs = JSON.parse(textReply.trim());
-      } catch (_directErr) {
-        // Strategy 2: Extract JSON object via regex
-        const match = textReply.match(/\{[\s\S]*\}/);
-        if (!match) {
-          throw new Error("No JSON object found in AI response");
-        }
-        parsedSpecs = JSON.parse(match[0].trim());
-      }
-
-      console.log(`[IMEI Lookup] Parsed specs:`, parsedSpecs);
-      res.json(parsedSpecs);
-    } catch (parseErr) {
-      console.error("Failed to parse Gemini response as JSON:", textReply, parseErr);
-      res.status(502).json({ error: "Invalid specifications format returned by AI." });
+    const parsed = parseSpecsJson(textReply);
+    if (!parsed) {
+      logger.error({ textReply }, "IMEI Lookup failed to parse specs JSON");
+      return res.status(502).json({ error: "Invalid specifications format returned by AI." });
     }
+
+    // Warn if search wasn't used (result may be inaccurate)
+    if (!searchUsed) {
+      parsed._warning = "Result based on AI knowledge only (search was not used). Verify accuracy manually.";
+      logger.warn("IMEI Lookup search not used, result may be less accurate");
+    }
+
+    logger.info({ result: parsed }, "IMEI Lookup final result");
+    res.json(parsed);
   } catch (err) {
     next(err);
+  }
+}
+
+/** Helper: safely parse a JSON specs string */
+function parseSpecsJson(text) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text.trim());
+  } catch (_) {
+    // Try to extract JSON from surrounding text
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return JSON.parse(match[0].trim());
+      } catch (__) {
+        return null;
+      }
+    }
+    return null;
   }
 }

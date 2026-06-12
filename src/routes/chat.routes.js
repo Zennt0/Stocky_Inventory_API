@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { chat, getHistory } from "../controller/chat.controller.js";
 import { authenticate } from "../middleware/auth.js";
+import { validate, chatSchema } from "../middleware/validation.js";
 
 const router = Router();
 
@@ -11,7 +12,6 @@ router.use(authenticate);
 router.get("/", getHistory);
 
 // POST /api/chat — Chat endpoint
-router.post("/", chat);
+router.post("/", validate(chatSchema), chat);
 
 export default router;
-

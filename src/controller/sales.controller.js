@@ -1,4 +1,4 @@
-import prisma from "../config/prisma.js";
+import * as salesService from "../services/sales.service.js";
 
 /** Safely parse an ID param — returns null if not a valid integer */
 function parseId(val) {
@@ -22,61 +22,11 @@ export async function createSale(req, res, next) {
     const pid = parseId(productId);
     if (!pid) return res.status(400).json({ error: "Invalid product ID." });
 
-    // Atomic transaction: check stock + create sale + decrement in one go
-    const result = await prisma.$transaction(async (tx) => {
-      // Re-read product inside the transaction to prevent race conditions
-      const product = await tx.product.findUnique({
-        where: { id: pid },
-      });
-
-      if (!product) {
-        throw Object.assign(new Error("Product not found."), { status: 404 });
-      }
-
-      if (product.quantity <= 0) {
-        throw Object.assign(new Error("Product is out of stock. Cannot sell."), { status: 400 });
-      }
-
-      // Create sale record
-      const sale = await tx.sale.create({
-        data: {
-          productId: pid,
-          soldById: req.user.id,
-          soldPrice: parseFloat(soldPrice),
-          customerName: customerName || null,
-        },
-        include: {
-          product: {
-            select: {
-              id: true,
-              brand: true,
-              model: true,
-              variant: true,
-              storage: true,
-              color: true,
-            },
-          },
-          soldBy: {
-            select: { id: true, name: true },
-          },
-        },
-      });
-
-      // Decrease quantity and update status
-      const newQuantity = product.quantity - 1;
-      let newStatus = "IN_STOCK";
-      if (newQuantity === 0) newStatus = "OUT_OF_STOCK";
-      else if (newQuantity <= 3) newStatus = "LOW_STOCK";
-
-      await tx.product.update({
-        where: { id: pid },
-        data: {
-          quantity: newQuantity,
-          status: newStatus,
-        },
-      });
-
-      return { sale, newQuantity, newStatus };
+    const result = await salesService.recordSale({
+      productId: pid,
+      soldById: req.user.id,
+      soldPrice,
+      customerName,
     });
 
     res.status(201).json({
@@ -102,7 +52,7 @@ export async function getSales(req, res, next) {
     const take = parseInt(limit);
 
     // Build date filter
-    const where = {};
+    const where = { soldById: req.user.id };
     const now = new Date();
 
     if (period) {
@@ -129,31 +79,7 @@ export async function getSales(req, res, next) {
       if (to) where.soldDate = { ...where.soldDate, lte: new Date(to) };
     }
 
-    const [sales, total] = await Promise.all([
-      prisma.sale.findMany({
-        where,
-        orderBy: { soldDate: "desc" },
-        skip,
-        take,
-        include: {
-          product: {
-            select: {
-              id: true,
-              brand: true,
-              model: true,
-              variant: true,
-              storage: true,
-              color: true,
-              purchasePrice: true,
-            },
-          },
-          soldBy: {
-            select: { id: true, name: true },
-          },
-        },
-      }),
-      prisma.sale.count({ where }),
-    ]);
+    const { sales, total } = await salesService.listSales({ where, skip, take });
 
     res.json({
       sales,
@@ -178,7 +104,7 @@ export async function getSalesStats(req, res, next) {
     const now = new Date();
 
     // Build date filter
-    const where = {};
+    const where = { soldById: req.user.id };
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     switch (period) {
@@ -201,19 +127,7 @@ export async function getSalesStats(req, res, next) {
         break;
     }
 
-    // Get all matching sales with product purchase price
-    const sales = await prisma.sale.findMany({
-      where,
-      select: {
-        soldPrice: true,
-        product: {
-          select: {
-            brand: true,
-            purchasePrice: true,
-          },
-        },
-      },
-    });
+    const sales = await salesService.getSalesForStats(where);
 
     // Calculate stats
     const totalSales = sales.length;
@@ -257,29 +171,9 @@ export async function getSale(req, res, next) {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid sale ID." });
 
-    const sale = await prisma.sale.findUnique({
-      where: { id },
-      include: {
-        product: {
-          select: {
-            id: true,
-            brand: true,
-            model: true,
-            variant: true,
-            storage: true,
-            ram: true,
-            color: true,
-            imei: true,
-            purchasePrice: true,
-          },
-        },
-        soldBy: {
-          select: { id: true, name: true },
-        },
-      },
-    });
+    const sale = await salesService.findSaleById(id);
 
-    if (!sale) {
+    if (!sale || sale.soldById !== req.user.id) {
       return res.status(404).json({ error: "Sale not found." });
     }
 

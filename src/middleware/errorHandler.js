@@ -1,9 +1,26 @@
+import { ZodError } from "zod";
+import logger from "../config/logger.js";
+
 /**
  * Global Error Handler Middleware
  * Catches all unhandled errors and returns consistent JSON responses
  */
 export function errorHandler(err, req, res, next) {
-  console.error("Error:", err.message);
+  // ── Zod Validation Errors ──
+  if (err instanceof ZodError) {
+    const details = {};
+    err.errors.forEach((e) => {
+      const field = e.path.join(".") || "input";
+      details[field] = e.message;
+    });
+    logger.warn({ details }, "Validation Error");
+    return res.status(400).json({
+      error: "Validation failed.",
+      details,
+    });
+  }
+
+  logger.error({ err }, `Error: ${err.message}`);
 
   // Prisma errors
   if (err.code === "P2002") {

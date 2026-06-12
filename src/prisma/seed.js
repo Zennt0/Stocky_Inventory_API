@@ -5,14 +5,21 @@ async function main() {
   const passwordHash = await bcrypt.hash("admin123", 12);
 
   // Create admin user if not exists
-  await prisma.user.upsert({
+  const admin = await prisma.user.upsert({
     where: { email: "admin@example.com" },
-    update: {},
+    update: {
+      password: passwordHash,
+      emailVerified: true,
+      failedLoginAttempts: 0,
+      lockoutUntil: null,
+    },
     create: {
-      name: "Admin",
+      firstName: "Admin",
+      lastName: "User",
       email: "admin@example.com",
       password: passwordHash,
       role: "ADMIN",
+      emailVerified: true,
     },
   });
 
@@ -31,7 +38,9 @@ async function main() {
   // Optional: sample product
   await prisma.product.upsert({
     where: { imei: "TEST-IMEI-0001" },
-    update: {},
+    update: {
+      userId: admin.id,
+    },
     create: {
       brand: "TestBrand",
       model: "TestModel",
@@ -41,6 +50,7 @@ async function main() {
       color: "Black",
       imei: "TEST-IMEI-0001",
       supplierId: supplier.id,
+      userId: admin.id,
       purchasePrice: 100.0,
       sellingPrice: 150.0,
       quantity: 10,

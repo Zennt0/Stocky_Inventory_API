@@ -12,6 +12,14 @@ import {
   updateProduct,
   deleteProduct,
 } from "../controller/product.controller.js";
+import {
+  validate,
+  createProductSchema,
+  updateProductSchema,
+  productIdParam,
+  productImeiParam,
+  productQuerySchema,
+} from "../middleware/validation.js";
 
 const router = Router();
 
@@ -19,18 +27,18 @@ const router = Router();
 router.use(authenticate);
 
 // Read routes (any authenticated user)
-router.get("/", getProducts);
+router.get("/", validate(productQuerySchema), getProducts);
 router.get("/low-stock", getLowStock);
 router.get("/stats", getStats);
-router.get("/imei/:imei", getByImei);
-router.get("/lookup-specs/:imei", aiLookupLimiter, lookupSpecs);
-router.get("/:id", getProduct);
+router.get("/imei/:imei", validate(productImeiParam), getByImei);
+router.get("/lookup-specs/:imei", aiLookupLimiter, validate(productImeiParam), lookupSpecs);
+router.get("/:id", validate(productIdParam), getProduct);
 
 // Write routes (Admin & Staff only)
-router.post("/", authorize("ADMIN", "STAFF"), createProduct);
-router.put("/:id", authorize("ADMIN", "STAFF"), updateProduct);
+router.post("/", authorize("ADMIN", "STAFF"), validate(createProductSchema), createProduct);
+router.put("/:id", authorize("ADMIN", "STAFF"), validate(updateProductSchema), updateProduct);
 
 // Delete (Admin only)
-router.delete("/:id", authorize("ADMIN"), deleteProduct);
+router.delete("/:id", authorize("ADMIN"), validate(productIdParam), deleteProduct);
 
 export default router;

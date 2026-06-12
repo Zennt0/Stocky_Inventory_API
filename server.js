@@ -5,6 +5,7 @@ import helmet from "helmet";
 import { connect, disconnect } from "./src/config/db.js";
 import { errorHandler } from "./src/middleware/errorHandler.js";
 import { apiLimiter, authLimiter } from "./src/middleware/rateLimit.js";
+import logger from "./src/config/logger.js";
 
 // Routes
 import authRoutes from "./src/routes/auth.routes.js";
@@ -13,6 +14,10 @@ import salesRoutes from "./src/routes/sales.routes.js";
 import chatRoutes from "./src/routes/chat.routes.js";
 
 dotenv.config();
+
+// Validate environment variables immediately after dotenv loads
+import "./src/config/env.js";
+
 await connect();
 
 const app = express();
@@ -56,7 +61,7 @@ app.use("/api/", apiLimiter);
 // ── API Routes ──
 app.get("/", (req, res) => {
   res.json({
-    message: "📱 Inventory System API",
+    message: "📱 Stocky API",
     version: "1.0.0",
   });
 });
@@ -71,12 +76,12 @@ app.use(errorHandler);
 
 // ── Start Server ──
 const server = app.listen(PORT, () =>
-  console.log(`🚀 Server running on http://localhost:${PORT}`),
+  logger.info(`Server running on http://localhost:${PORT}`),
 );
 
 // ── Graceful Shutdown (handles both local Ctrl+C and Render deploys) ──
 const shutdown = async () => {
-  console.log("\n🔄 Shutting down gracefully...");
+  logger.info("Shutting down gracefully...");
   await disconnect();
   server.close(() => process.exit(0));
 };

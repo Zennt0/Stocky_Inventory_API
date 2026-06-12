@@ -1,11 +1,12 @@
 import prisma from "./prisma.js";
+import logger from "./logger.js";
 
 async function connect() {
   try {
     await prisma.$connect();
-    console.log("Prisma connected");
+    logger.info("Prisma connected");
   } catch (err) {
-    console.error("Prisma connection error:", err);
+    logger.error({ err }, "Prisma connection error");
     throw err;
   }
 }
@@ -13,9 +14,9 @@ async function connect() {
 async function disconnect() {
   try {
     await prisma.$disconnect();
-    console.log("Prisma disconnected");
+    logger.info("Prisma disconnected");
   } catch (err) {
-    console.error("Prisma disconnect error:", err);
+    logger.error({ err }, "Prisma disconnect error");
   }
 }
 
