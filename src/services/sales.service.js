@@ -81,6 +81,16 @@ export async function recordSale({ productId, soldById, soldPrice, customerName 
       },
     });
 
+    // Log stock history for sale
+    await tx.stockHistory.create({
+      data: {
+        productId,
+        change: -1,
+        type: "SOLD",
+        userId: soldById,
+      },
+    });
+
     // ── Step 4: Read back updated product state ─────────────────
     const updatedProduct = await tx.product.findUnique({
       where: { id: productId },

@@ -243,7 +243,7 @@ export async function updateProduct(req, res, next) {
       return res.status(404).json({ error: "Product not found." });
     }
 
-    const product = await productService.updateProduct(id, data);
+    const product = await productService.updateProduct(id, data, req.user.id);
 
     res.json({ product });
   } catch (err) {

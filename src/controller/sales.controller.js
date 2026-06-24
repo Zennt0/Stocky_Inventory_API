@@ -127,7 +127,7 @@ export async function getSalesStats(req, res, next) {
         break;
     }
 
-    const sales = await salesService.getSalesForStats(where);
+    const sales = await salesService.getSalesForStats(where) || [];
 
     // Calculate stats
     const totalSales = sales.length;

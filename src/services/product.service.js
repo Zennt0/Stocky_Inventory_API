@@ -78,7 +78,7 @@ export async function findByImei(imei) {
   });
 }
 
-/** Find a product by ID (with recent sales) */
+/** Find a product by ID (with recent sales and stock history) */
 export async function findById(id) {
   return prisma.product.findUnique({
     where: { id },
@@ -94,7 +94,15 @@ export async function findById(id) {
           soldPrice: true,
           customerName: true,
           soldDate: true,
-          soldBy: { select: { name: true } },
+          soldBy: { select: { firstName: true, lastName: true } },
+        },
+      },
+      stockHistories: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: {
+            select: { firstName: true, lastName: true },
+          },
         },
       },
     },
@@ -108,15 +116,29 @@ export function computeStatus(quantity) {
   return "IN_STOCK";
 }
 
-/** Create a new product */
+/** Create a new product and log initial stock history */
 export async function createProduct(data) {
-  return prisma.product.create({
-    data,
-    include: {
-      supplier: {
-        select: { id: true, supplierName: true },
+  return prisma.$transaction(async (tx) => {
+    const product = await tx.product.create({
+      data,
+      include: {
+        supplier: {
+          select: { id: true, supplierName: true },
+        },
       },
-    },
+    });
+
+    // Always log creation in stock history, even if quantity is 0
+    await tx.stockHistory.create({
+      data: {
+        productId: product.id,
+        change: product.quantity,
+        type: "CREATED",
+        userId: product.userId,
+      },
+    });
+
+    return product;
   });
 }
 
@@ -125,16 +147,42 @@ export async function findByIdLean(id) {
   return prisma.product.findUnique({ where: { id } });
 }
 
-/** Update a product */
-export async function updateProduct(id, data) {
-  return prisma.product.update({
-    where: { id },
-    data,
-    include: {
-      supplier: {
-        select: { id: true, supplierName: true },
+/** Update a product and log stock history changes if quantity changes */
+export async function updateProduct(id, data, currentUserId) {
+  return prisma.$transaction(async (tx) => {
+    // Get current quantity before updating
+    const existing = await tx.product.findUnique({
+      where: { id },
+      select: { quantity: true },
+    });
+
+    const oldQty = existing ? existing.quantity : 0;
+
+    const product = await tx.product.update({
+      where: { id },
+      data,
+      include: {
+        supplier: {
+          select: { id: true, supplierName: true },
+        },
       },
-    },
+    });
+
+    if (data.quantity !== undefined && data.quantity !== oldQty) {
+      const difference = data.quantity - oldQty;
+      if (difference !== 0) {
+        await tx.stockHistory.create({
+          data: {
+            productId: id,
+            change: difference,
+            type: "MANUAL_ADJUSTMENT",
+            userId: currentUserId,
+          },
+        });
+      }
+    }
+
+    return product;
   });
 }
 

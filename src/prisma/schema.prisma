@@ -38,6 +38,7 @@ model User {
     sales                    Sale[]
     chatMessages             ChatMessage[]
     products                 Product[]
+    stockHistories           StockHistory[]
 }
 
 model Supplier {
@@ -71,6 +72,7 @@ model Product {
     createdAt     DateTime      @default(now())
     updatedAt     DateTime      @updatedAt
     sales         Sale[]
+    stockHistories StockHistory[]
 
     @@index([brand], name: "idx_products_brand")
     @@index([status], name: "idx_products_status")
@@ -101,4 +103,17 @@ model ChatMessage {
     createdAt DateTime @default(now())
 
     @@index([userId], name: "idx_chat_user")
+}
+
+model StockHistory {
+    id        Int      @id @default(autoincrement())
+    productId Int
+    product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+    change    Int      // Quantity difference (positive for additions, negative for reductions)
+    type      String   // "CREATED", "SOLD", or "MANUAL_ADJUSTMENT"
+    userId    Int
+    user      User     @relation(fields: [userId], references: [id])
+    createdAt DateTime @default(now())
+
+    @@index([productId], name: "idx_stock_history_product")
 }

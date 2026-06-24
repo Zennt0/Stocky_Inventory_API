@@ -9,7 +9,7 @@ export function errorHandler(err, req, res, next) {
   // ── Zod Validation Errors ──
   if (err instanceof ZodError) {
     const details = {};
-    err.errors.forEach((e) => {
+    (err.issues || []).forEach((e) => {
       const field = e.path.join(".") || "input";
       details[field] = e.message;
     });

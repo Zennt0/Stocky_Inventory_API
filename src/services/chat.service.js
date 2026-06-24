@@ -140,3 +140,23 @@ export async function getInventoryContext(userId) {
 
   return { productStats, lowStockProducts, allProducts, salesStats, recentSales };
 }
+
+/** Get lightweight stats context for non-inventory intents (specs, general chat) */
+export async function getMinimalContext(userId) {
+  const [totalProducts, totalUnits, lowStockCount] = await Promise.all([
+    prisma.product.count({ where: { userId } }),
+    prisma.product.aggregate({
+      where: { userId },
+      _sum: { quantity: true },
+    }),
+    prisma.product.count({
+      where: { status: { in: ["LOW_STOCK", "OUT_OF_STOCK"] }, userId },
+    }),
+  ]);
+
+  return {
+    totalProducts,
+    totalUnits: totalUnits._sum.quantity || 0,
+    lowStockCount,
+  };
+}
