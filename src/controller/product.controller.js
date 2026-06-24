@@ -1,10 +1,26 @@
 import * as productService from "../services/product.service.js";
 import logger from "../config/logger.js";
+import prisma from "../config/prisma.js";
 
 /** Safely parse an ID param — returns null if not a valid integer */
 function parseId(val) {
   const n = parseInt(val, 10);
   return Number.isNaN(n) || n <= 0 ? null : n;
+}
+
+/**
+ * Find or create a Supplier by name.
+ * Returns the supplierId (Int) or null if no name provided.
+ */
+async function resolveSupplier(supplierName) {
+  if (!supplierName || !supplierName.trim()) return null;
+  const name = supplierName.trim();
+  const supplier = await prisma.supplier.upsert({
+    where: { supplierName: name },
+    update: {},
+    create: { supplierName: name },
+  });
+  return supplier.id;
 }
 
 // ──────────────────────────────────────────
@@ -154,7 +170,7 @@ export async function createProduct(req, res, next) {
       ram,
       color,
       imei,
-      supplierId,
+      supplier,
       purchasePrice,
       sellingPrice,
       quantity,
@@ -169,6 +185,7 @@ export async function createProduct(req, res, next) {
 
     const qty = quantity || 0;
     const status = productService.computeStatus(qty);
+    const supplierId = await resolveSupplier(supplier);
 
     const product = await productService.createProduct({
       brand,
@@ -178,7 +195,7 @@ export async function createProduct(req, res, next) {
       ram,
       color,
       imei,
-      supplierId: supplierId ? parseInt(supplierId) : null,
+      supplierId,
       userId: req.user.id,
       purchasePrice: parseFloat(purchasePrice),
       sellingPrice: parseFloat(sellingPrice),
@@ -206,7 +223,7 @@ export async function updateProduct(req, res, next) {
       ram,
       color,
       imei,
-      supplierId,
+      supplier,
       purchasePrice,
       sellingPrice,
       quantity,
@@ -222,8 +239,8 @@ export async function updateProduct(req, res, next) {
     if (ram !== undefined) data.ram = ram;
     if (color !== undefined) data.color = color;
     if (imei !== undefined) data.imei = imei;
-    if (supplierId !== undefined)
-      data.supplierId = supplierId ? parseInt(supplierId) : null;
+    if (supplier !== undefined)
+      data.supplierId = await resolveSupplier(supplier);
     if (purchasePrice !== undefined)
       data.purchasePrice = parseFloat(purchasePrice);
     if (sellingPrice !== undefined)
