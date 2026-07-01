@@ -20,20 +20,20 @@
 
 ## 🛠️ Tech Stack
 
-| Technology | Purpose |
-|---|---|
-| **Node.js** | Runtime |
-| **Express.js v5** | Web framework |
-| **Prisma** | ORM & database migrations |
-| **PostgreSQL** | Database |
-| **JWT** | Authentication (access + refresh tokens) |
-| **Zod** | Request validation |
-| **Nodemailer** | Email (verification, password reset) |
-| **Google Gemini API** | AI chatbot & phone specs lookup |
-| **Pino** | Structured logging |
-| **Helmet** | HTTP security headers |
-| **express-rate-limit** | Rate limiting |
-| **bcryptjs** | Password hashing |
+| Technology             | Purpose                                  |
+| ---------------------- | ---------------------------------------- |
+| **Node.js**            | Runtime                                  |
+| **Express.js v5**      | Web framework                            |
+| **Prisma**             | ORM & database migrations                |
+| **PostgreSQL**         | Database                                 |
+| **JWT**                | Authentication (access + refresh tokens) |
+| **Zod**                | Request validation                       |
+| **Nodemailer**         | Email (verification, password reset)     |
+| **Google Gemini API**  | AI chatbot & phone specs lookup          |
+| **Pino**               | Structured logging                       |
+| **Helmet**             | HTTP security headers                    |
+| **express-rate-limit** | Rate limiting                            |
+| **bcryptjs**           | Password hashing                         |
 
 ---
 
@@ -156,48 +156,48 @@ The API will be available at `http://localhost:3000`.
 
 ### 🔐 Authentication — `/api/auth`
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/register` | Create a new account |
-| `POST` | `/login` | Login & receive tokens |
-| `POST` | `/verify-email` | Verify email with OTP code |
-| `POST` | `/resend-verification` | Resend verification email |
-| `POST` | `/forgot-password` | Send password reset code |
-| `POST` | `/verify-reset-code` | Verify the reset code |
-| `POST` | `/reset-password` | Set new password |
-| `POST` | `/refresh` | Refresh access token |
-| `POST` | `/logout` | Invalidate refresh token |
-| `GET` | `/me` | Get current user profile |
+| Method | Endpoint               | Description                |
+| ------ | ---------------------- | -------------------------- |
+| `POST` | `/register`            | Create a new account       |
+| `POST` | `/login`               | Login & receive tokens     |
+| `POST` | `/verify-email`        | Verify email with OTP code |
+| `POST` | `/resend-verification` | Resend verification email  |
+| `POST` | `/forgot-password`     | Send password reset code   |
+| `POST` | `/verify-reset-code`   | Verify the reset code      |
+| `POST` | `/reset-password`      | Set new password           |
+| `POST` | `/refresh`             | Refresh access token       |
+| `POST` | `/logout`              | Invalidate refresh token   |
+| `GET`  | `/me`                  | Get current user profile   |
 
 ### 📦 Products — `/api/products`
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/` | List products (search, filter, paginate) |
-| `GET` | `/low-stock` | Get low/out-of-stock products |
-| `GET` | `/stats` | Get inventory statistics |
-| `GET` | `/imei/:imei` | Find product by IMEI |
-| `GET` | `/lookup-specs/:imei` | AI-powered specs lookup by IMEI |
-| `GET` | `/:id` | Get product details (with stock history) |
-| `POST` | `/` | Create a new product |
-| `PUT` | `/:id` | Update a product |
-| `DELETE` | `/:id` | Delete a product |
+| Method   | Endpoint              | Description                              |
+| -------- | --------------------- | ---------------------------------------- |
+| `GET`    | `/`                   | List products (search, filter, paginate) |
+| `GET`    | `/low-stock`          | Get low/out-of-stock products            |
+| `GET`    | `/stats`              | Get inventory statistics                 |
+| `GET`    | `/imei/:imei`         | Find product by IMEI                     |
+| `GET`    | `/lookup-specs/:imei` | AI-powered specs lookup by IMEI          |
+| `GET`    | `/:id`                | Get product details (with stock history) |
+| `POST`   | `/`                   | Create a new product                     |
+| `PUT`    | `/:id`                | Update a product                         |
+| `DELETE` | `/:id`                | Delete a product                         |
 
 ### 💰 Sales — `/api/sales`
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/` | Record a new sale |
-| `GET` | `/` | List sales (filter, paginate) |
-| `GET` | `/stats` | Sales statistics (revenue, profit, top brands) |
-| `GET` | `/:id` | Get sale details |
+| Method | Endpoint | Description                                    |
+| ------ | -------- | ---------------------------------------------- |
+| `POST` | `/`      | Record a new sale                              |
+| `GET`  | `/`      | List sales (filter, paginate)                  |
+| `GET`  | `/stats` | Sales statistics (revenue, profit, top brands) |
+| `GET`  | `/:id`   | Get sale details                               |
 
 ### 🤖 Chat (AI Assistant) — `/api/chat`
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/` | Get chat history |
-| `POST` | `/` | Send a message to Stocky AI |
+| Method | Endpoint | Description                 |
+| ------ | -------- | --------------------------- |
+| `GET`  | `/`      | Get chat history            |
+| `POST` | `/`      | Send a message to Stocky AI |
 
 ---
 
@@ -222,28 +222,28 @@ User ──────── StockHistory
 
 ### Models
 
-| Model | Description |
-|---|---|
-| **User** | App users with email/password auth, roles (ADMIN/STAFF) |
-| **Product** | Phone inventory items with brand, model, specs, IMEI, pricing |
-| **Supplier** | Supplier companies, auto-created when adding products |
-| **Sale** | Sales records linked to products and users |
-| **StockHistory** | Audit trail — tracks CREATED, SOLD, MANUAL_ADJUSTMENT events |
-| **ChatMessage** | Persistent AI chat history per user |
+| Model            | Description                                                   |
+| ---------------- | ------------------------------------------------------------- |
+| **User**         | App users with email/password auth, roles (ADMIN/STAFF)       |
+| **Product**      | Phone inventory items with brand, model, specs, IMEI, pricing |
+| **Supplier**     | Supplier companies, auto-created when adding products         |
+| **Sale**         | Sales records linked to products and users                    |
+| **StockHistory** | Audit trail — tracks CREATED, SOLD, MANUAL_ADJUSTMENT events  |
+| **ChatMessage**  | Persistent AI chat history per user                           |
 
 ---
 
 ## 🔧 Available Scripts
 
-| Command | Description |
-|---|---|
-| `npm run dev` | Start dev server with hot-reload (nodemon) |
-| `npm start` | Start production server |
-| `npm run prisma:migrate` | Run database migrations |
-| `npm run prisma:generate` | Generate Prisma client |
-| `npm run prisma:studio` | Open Prisma Studio (database GUI) |
-| `npm run seed` | Seed the database with sample data |
-| `npm run render:build` | Build script for Render deployment |
+| Command                   | Description                                |
+| ------------------------- | ------------------------------------------ |
+| `npm run dev`             | Start dev server with hot-reload (nodemon) |
+| `npm start`               | Start production server                    |
+| `npm run prisma:migrate`  | Run database migrations                    |
+| `npm run prisma:generate` | Generate Prisma client                     |
+| `npm run prisma:studio`   | Open Prisma Studio (database GUI)          |
+| `npm run seed`            | Seed the database with sample data         |
+| `npm run render:build`    | Build script for Render deployment         |
 
 ---
 
@@ -277,13 +277,3 @@ This project is configured for deployment on [Render](https://render.com):
 - **JWT Refresh Tokens** — Short-lived access tokens with long-lived refresh tokens
 
 ---
-
-## 📄 License
-
-ISC
-
----
-
-<p align="center">
-  Built with ❤️ for <strong>Stocky</strong> — AI-Powered Inventory Management
-</p>
