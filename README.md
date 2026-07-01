@@ -154,52 +154,50 @@ The API will be available at `http://localhost:3000`.
 
 ## 📚 API Endpoints
 
-All endpoints (except auth) require a valid JWT in the `Authorization: Bearer <token>` header.
-
 ### 🔐 Authentication — `/api/auth`
 
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `POST` | `/register` | Create a new account | ✗ |
-| `POST` | `/login` | Login & receive tokens | ✗ |
-| `POST` | `/verify-email` | Verify email with OTP code | ✗ |
-| `POST` | `/resend-verification` | Resend verification email | ✗ |
-| `POST` | `/forgot-password` | Send password reset code | ✗ |
-| `POST` | `/verify-reset-code` | Verify the reset code | ✗ |
-| `POST` | `/reset-password` | Set new password | ✗ |
-| `POST` | `/refresh` | Refresh access token | ✗ |
-| `POST` | `/logout` | Invalidate refresh token | ✗ |
-| `GET` | `/me` | Get current user profile | ✓ |
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/register` | Create a new account |
+| `POST` | `/login` | Login & receive tokens |
+| `POST` | `/verify-email` | Verify email with OTP code |
+| `POST` | `/resend-verification` | Resend verification email |
+| `POST` | `/forgot-password` | Send password reset code |
+| `POST` | `/verify-reset-code` | Verify the reset code |
+| `POST` | `/reset-password` | Set new password |
+| `POST` | `/refresh` | Refresh access token |
+| `POST` | `/logout` | Invalidate refresh token |
+| `GET` | `/me` | Get current user profile |
 
 ### 📦 Products — `/api/products`
 
-| Method | Endpoint | Description | Auth | Role |
-|---|---|---|---|---|
-| `GET` | `/` | List products (search, filter, paginate) | ✓ | Any |
-| `GET` | `/low-stock` | Get low/out-of-stock products | ✓ | Any |
-| `GET` | `/stats` | Get inventory statistics | ✓ | Any |
-| `GET` | `/imei/:imei` | Find product by IMEI | ✓ | Any |
-| `GET` | `/lookup-specs/:imei` | AI-powered specs lookup by IMEI | ✓ | Any |
-| `GET` | `/:id` | Get product details (with stock history) | ✓ | Any |
-| `POST` | `/` | Create a new product | ✓ | Admin, Staff |
-| `PUT` | `/:id` | Update a product | ✓ | Admin, Staff |
-| `DELETE` | `/:id` | Delete a product | ✓ | Admin |
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | List products (search, filter, paginate) |
+| `GET` | `/low-stock` | Get low/out-of-stock products |
+| `GET` | `/stats` | Get inventory statistics |
+| `GET` | `/imei/:imei` | Find product by IMEI |
+| `GET` | `/lookup-specs/:imei` | AI-powered specs lookup by IMEI |
+| `GET` | `/:id` | Get product details (with stock history) |
+| `POST` | `/` | Create a new product |
+| `PUT` | `/:id` | Update a product |
+| `DELETE` | `/:id` | Delete a product |
 
 ### 💰 Sales — `/api/sales`
 
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `POST` | `/` | Record a new sale | ✓ |
-| `GET` | `/` | List sales (filter, paginate) | ✓ |
-| `GET` | `/stats` | Sales statistics (revenue, profit, top brands) | ✓ |
-| `GET` | `/:id` | Get sale details | ✓ |
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/` | Record a new sale |
+| `GET` | `/` | List sales (filter, paginate) |
+| `GET` | `/stats` | Sales statistics (revenue, profit, top brands) |
+| `GET` | `/:id` | Get sale details |
 
 ### 🤖 Chat (AI Assistant) — `/api/chat`
 
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/` | Get chat history | ✓ |
-| `POST` | `/` | Send a message to Stocky AI | ✓ |
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | Get chat history |
+| `POST` | `/` | Send a message to Stocky AI |
 
 ---
 
