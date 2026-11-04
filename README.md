@@ -1,6 +1,8 @@
 # 📱 Stocky API — Backend
 
 > RESTful API backend for **Stocky**, an AI-powered phone store inventory management system built with Express.js, Prisma, and PostgreSQL.
+>
+> 📱 **Looking for the mobile client?** Check out the [Stocky Mobile App (Flutter)](https://github.com/Zennt0/Stocky_Inventory-Mobile).
 
 ---
 
@@ -91,8 +93,8 @@ backend/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Iano023/stocky-api.git
-cd stocky-api
+git clone https://github.com/Zennt0/Stocky_Inventory_API.git
+cd Stocky_Inventory_API
 ```
 
 ### 2. Install dependencies
